@@ -10,11 +10,15 @@ import HTTPTracker from "../lib/HTTPTracker.js";
 import UDPTracker from "../lib/UDPTracker.js";
 
 export default class TorrentDownloader {
+  #totalDownloaded;
+  #totalSize;
   constructor(torrent) {
     this.torrent = torrent;
+    this.#totalDownloaded = 0;
+    this.#totalSize = TorrentHelper.getSize(torrent);
   }
   #chokeHandler(socket) {
-    socket.close();
+    socket.end();
   }
   #unchokeHandler(socket, pieces, state) {
     state.chocked = false;
@@ -31,10 +35,10 @@ export default class TorrentDownloader {
     if (isFirstPiece) this.#requestPiece(socket, pieces, queue);
   }
   #getFileIndex(offset) {
-    if (!this.torrent.files) return 0;
+    if (!this.torrent.info.files) return 0;
     let index = 0;
     const curLength = 0;
-    for (let file of this.torrent.files) {
+    for (let file of this.torrent.info.files) {
       if (offset >= curLength && offset < curLength + file.length) {
         break;
       }
@@ -44,11 +48,18 @@ export default class TorrentDownloader {
     return index;
   }
   #pieceHandler(payload, socket, pieces, queue, files) {
-    console.log("Writing Piece");
     pieces.addReceived(payload);
-    const offset = pieces.index * torrent.info["piece length"] + pieces.begin;
+    const offset =
+      payload.index * this.torrent.info["piece length"] + payload.begin;
     const fd = files[this.#getFileIndex(offset)];
-    fs.write(fd, pieces.block, 0, pieces.block.length, offset, () => {});
+    fs.write(fd, payload.block, 0, payload.block.length, offset, () => {
+      this.#totalDownloaded += payload.block.length;
+      process.stdout.write(
+        `Downloading ${(this.#totalDownloaded / this.#totalSize).toFixed(
+          3
+        )}% complete... \r`
+      );
+    });
 
     if (pieces.isDone()) {
       console.log("DONE!");
@@ -91,7 +102,7 @@ export default class TorrentDownloader {
   #haveHandler(payload, socket, pieces, queue) {
     const isFirstPiece = queue.length() == 0;
     const pieceIndex = payload.readUInt32BE(0);
-    queue.push(pieceIndex);
+    queue.queue(pieceIndex);
     if (isFirstPiece) {
       this.#requestPiece(socket, pieces, queue);
     }
@@ -104,7 +115,7 @@ export default class TorrentDownloader {
   }
   #connectAndDownloadFromPeer(peer, pieces, files) {
     const socket = net.Socket();
-    socket.on("error", console.log);
+    socket.on("error", (e) => {});
     socket.connect(peer.port, peer.ip, () => {
       socket.write(TorrentMessageBuilder.buildHandshake(this.torrent));
     });
@@ -144,12 +155,11 @@ export default class TorrentDownloader {
             destPath,
             this.torrent.info.name.toString("utf8"),
             file.path.map((p) => p.toString("utf8")).join(path.sep)
-          ),
-          ""
+          )
         )
       );
     } else {
-      fs.writeFileSync(
+      fs.ensureFileSync(
         path.resolve(destPath, this.torrent.info.name.toString("utf8"))
       );
     }
@@ -165,7 +175,6 @@ export default class TorrentDownloader {
     this.#populateFiles(path);
     const fds = this.#createFdList(path);
     tracker.getPeerList((peerlist) => {
-      console.log(peerlist);
       const pieces = new Pieces(this.torrent);
       peerlist.forEach((peer) => {
         this.#connectAndDownloadFromPeer(peer, pieces, fds);

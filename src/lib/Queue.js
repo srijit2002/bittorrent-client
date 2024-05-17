@@ -13,7 +13,7 @@ export default class Queue {
     for (let i = 0; i < nBlocks; i++) {
       const pieceBlock = {
         index: pieceIndex,
-        begin: i * TorrentHelper.getBlockLen(),
+        begin: i * TorrentHelper.getBlockLen(this._torrent),
         length: TorrentHelper.getBlockLen(this._torrent, pieceIndex, i),
       };
       this._queue.push(pieceBlock);

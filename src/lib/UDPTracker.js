@@ -101,7 +101,6 @@ export default class UDPTracker {
         console.log("Some error has occured -> ", err);
         return;
       }
-      console.log("Connection request sent to tracker ");
     });
 
     socket.on("message", (response) => {
@@ -111,6 +110,7 @@ export default class UDPTracker {
         this.#udpSend(socket, announceReq, this.#torrentUrl);
       } else if (this.#getRespType(response) === "announce") {
         const announceResp = this.#parseAnnounceResp(response);
+        console.log("Download will start shortly\n");
         callback(announceResp.peers);
       } else {
         console.log("Tracker Error: ", response.toString("utf8", 8));

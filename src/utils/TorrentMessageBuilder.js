@@ -67,8 +67,8 @@ export default class TorrentMessageBuilder {
     return buf;
   };
 
-  static buildBitfield = (bitfield) => {
-    const buf = Buffer.alloc(14);
+  static buildBitfield(bitfield) {
+    const buf = Buffer.alloc(5 + bitfield.length);
     // length
     buf.writeUInt32BE(payload.length + 1, 0);
     // id
@@ -76,7 +76,7 @@ export default class TorrentMessageBuilder {
     // bitfield
     bitfield.copy(buf, 5);
     return buf;
-  };
+  }
 
   static buildRequest(payload) {
     const buf = Buffer.alloc(17);
