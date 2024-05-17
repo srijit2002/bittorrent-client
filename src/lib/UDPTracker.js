@@ -76,7 +76,7 @@ export default class UDPTracker {
     Buffer.alloc(8).copy(buf, 56);
     // left
     let buff = Buffer.alloc(8);
-    buff.writeBigInt64BE(TorrentHelper.getSize(this.torrent));
+    buff.writeBigInt64BE(BigInt(TorrentHelper.getSize(this.torrent)));
     buff.copy(buf, 64);
     // uploaded
     Buffer.alloc(8).copy(buf, 72);
