@@ -10,7 +10,7 @@ export default class UDPTracker {
     this.#torrentUrl = new URL(torrent.announce.toString("utf8"));
   }
   #udpSend(socket, message, url, callback = () => {}) {
-    socket.send(message, url.port, url.hostname, callback);
+    socket.send(message, 0, message.length, url.port, url.hostname, callback);
   }
   #getRespType(resp) {
     const action = resp.readUInt32BE(0);
@@ -87,7 +87,7 @@ export default class UDPTracker {
     // key
     crypto.randomBytes(4).copy(buf, 88);
     // num want
-    buf.writeInt32BE(2, 92);
+    buf.writeInt32BE(-1, 92);
     // port
     buf.writeUInt16BE(port, 96);
 
@@ -106,13 +106,10 @@ export default class UDPTracker {
 
     socket.on("message", (response) => {
       if (this.#getRespType(response) === "connect") {
-        console.log("Tracker responded");
         const connResp = this.#parseConnResp(response);
         const announceReq = this.#buildAnnounceReq(connResp.connectionId);
-        console.log("Announce request sent");
         this.#udpSend(socket, announceReq, this.#torrentUrl);
       } else if (this.#getRespType(response) === "announce") {
-        console.log("Announce response received");
         const announceResp = this.#parseAnnounceResp(response);
         callback(announceResp.peers);
       } else {
