@@ -3,11 +3,11 @@ import dgram from "node:dgram";
 import TorrentHelper from "../utils/TorrentHelper.js";
 import IDGenerator from "./IDGenerator.js";
 
-export default class Tracker {
+export default class UDPTracker {
   #torrentUrl;
   constructor(torrent) {
     this.torrent = torrent;
-    this.#torrentUrl = new URL(torrent.announce.toString("utf-8"));
+    this.#torrentUrl = new URL(torrent.announce.toString("utf8"));
   }
   #udpSend(socket, message, url, callback = () => {}) {
     socket.send(message, url.port, url.hostname, callback);

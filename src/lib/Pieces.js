@@ -4,7 +4,7 @@ import TorrentHelper from "../utils/TorrentHelper.js";
 export default class Pieces {
   constructor(torrent) {
     function buildPiecesArray() {
-      const nPieces = Math.ceil(Buffer.from(torrent.info.pieces).length / 20);
+      const nPieces = torrent.info.pieces.length / 20;
       const arr = new Array(nPieces).fill(null);
       return arr.map((_, i) =>
         new Array(TorrentHelper.blocksPerPiece(torrent, i)).fill(false)

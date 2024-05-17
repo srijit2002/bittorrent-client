@@ -1,4 +1,3 @@
-import Tracker from "../lib/Tracker.js";
 import net from "node:net";
 import TorrentMessageBuilder from "./TorrentMessageBuilder.js";
 import TorrentHelper from "./TorrentHelper.js";
@@ -7,6 +6,8 @@ import Queue from "../lib/Queue.js";
 import fs from "fs-extra";
 import onWholeMsg from "./onWholeMessage.js";
 import path from "node:path";
+import HTTPTracker from "../lib/HTTPTracker.js";
+import UDPTracker from "../lib/UDPTracker.js";
 
 export default class TorrentDownloader {
   constructor(torrent) {
@@ -119,15 +120,18 @@ export default class TorrentDownloader {
         fs.openSync(
           path.resolve(
             destPath,
-            this.torrent.info.name,
-            file.path.join(path.sep)
+            this.torrent.info.name.toString("utf8"),
+            file.path.map((p) => p.toString("utf8")).join(path.sep)
           ),
           "w"
         )
       );
     } else {
       fds.push(
-        fs.openSync(path.resolve(destPath, this.torrent.info.name), "w")
+        fs.openSync(
+          path.resolve(destPath, this.torrent.info.name.toString("utf8")),
+          "w"
+        )
       );
     }
     return fds;
@@ -138,21 +142,30 @@ export default class TorrentDownloader {
         fs.ensureFileSync(
           path.resolve(
             destPath,
-            this.torrent.info.name,
-            file.path.join(path.sep)
+            this.torrent.info.name.toString("utf8"),
+            file.path.map((p) => p.toString("utf8")).join(path.sep)
           ),
           ""
         )
       );
     } else {
-      fs.writeFileSync(path.resolve(destPath, this.torrent.info.name), "");
+      fs.writeFileSync(
+        path.resolve(destPath, this.torrent.info.name.toString("utf8"))
+      );
     }
   }
   download(path) {
-    const tracker = new Tracker(this.torrent);
+    let tracker = null;
+    if (new URL(this.torrent.announce.toString("utf8")).protocol === "http:") {
+      tracker = new HTTPTracker(this.torrent);
+    } else {
+      tracker = new UDPTracker(this.torrent);
+    }
+
     this.#populateFiles(path);
     const fds = this.#createFdList(path);
     tracker.getPeerList((peerlist) => {
+      console.log(peerlist);
       const pieces = new Pieces(this.torrent);
       peerlist.forEach((peer) => {
         this.#connectAndDownloadFromPeer(peer, pieces, fds);

@@ -11,7 +11,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "bencode": "^4.0.0",
+    "axios": "^1.6.8",
+    "bencode": "0.9.0",
     "fs-extra": "^11.2.0",
     "nodemon": "^3.1.0"
   }

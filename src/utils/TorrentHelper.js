@@ -1,6 +1,6 @@
 import bencode from "bencode";
-import fs from "fs";
-import crypto from "crypto";
+import fs from "fs-extra";
+import crypto from "node:crypto";
 
 export default class TorrentHelper {
   static BLOCK_LEN = Math.pow(2, 14);
@@ -8,7 +8,7 @@ export default class TorrentHelper {
     return this.BLOCK_LEN;
   }
   static parseTorrent(filePath) {
-    return bencode.decode(fs.readFileSync(filePath), "utf8");
+    return bencode.decode(fs.readFileSync(filePath));
   }
   static parsePeerMsg(msg) {
     const id = msg.length > 4 ? msg.readInt8(4) : null;
@@ -36,7 +36,7 @@ export default class TorrentHelper {
     const size = torrent.info.files
       ? torrent.info.files.map((file) => file.length).reduce((a, b) => a + b, 0)
       : torrent.info.length;
-    return BigInt(size);
+    return size;
   }
   static pieceLen(torrent, pieceIndex) {
     const totalLength = torrent.info.length;
