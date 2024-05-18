@@ -98,7 +98,6 @@ export default class UDPTracker {
     this.#udpSend(socket, this.#buildConnReq(), this.#torrentUrl, (err) => {
       if (err) {
         socket.close();
-        console.log("Some error has occured -> ", err);
         return;
       }
     });

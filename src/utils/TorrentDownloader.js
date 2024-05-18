@@ -166,21 +166,39 @@ export default class TorrentDownloader {
     }
   }
   download(path) {
-    let tracker = null;
-    if (new URL(this.torrent.announce.toString("utf8")).protocol === "http:") {
-      tracker = new HTTPTracker(this.torrent);
-    } else {
-      tracker = new UDPTracker(this.torrent);
-    }
-
     this.#populateFiles(path);
     const fds = this.#createFdList(path);
-    tracker.getPeerList((peerlist) => {
-      console.log("Download will start soon");
-      const pieces = new Pieces(this.torrent);
-      peerlist.forEach((peer) => {
-        this.#connectAndDownloadFromPeer(peer, pieces, fds);
+    let peerlist = new Set();
+    let cur = 0;
+    process.stdout.write("Peer discovery in progress\n");
+    let interval = setInterval(() => {
+      let url = this.torrent["announce-list"][cur][0].toString("utf8");
+      let tracker = null;
+      this.torrent.announce = this.torrent["announce-list"][cur][0];
+      if (new URL(url).protocol === "http:") {
+        tracker = new HTTPTracker(this.torrent);
+      } else {
+        tracker = new UDPTracker(this.torrent);
+      }
+      tracker.getPeerList((peers) => {
+        for (let peer of peers) {
+          peerlist.add(peer);
+        }
+        process.stdout.write(`Peer count ${peerlist.size}\r`);
+        if (peerlist.size >= 5) {
+          console.log("Download will start soon\n");
+          clearInterval(interval);
+          peerlist.forEach((peer) => {
+            const pieces = new Pieces(this.torrent);
+            this.#connectAndDownloadFromPeer(peer, pieces, fds);
+          });
+        }
       });
-    });
+      cur++;
+      if (cur == this.torrent["announce-list"].length) {
+        clearInterval(interval);
+        console.log("Please try again after some times");
+      }
+    }, 2500);
   }
 }
