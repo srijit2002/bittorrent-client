@@ -37,7 +37,7 @@ export default class TorrentDownloader {
   #getFileIndex(offset) {
     if (!this.torrent.info.files) return 0;
     let index = 0;
-    const curLength = 0;
+    let curLength = 0;
     for (let file of this.torrent.info.files) {
       if (offset >= curLength && offset < curLength + file.length) {
         break;
@@ -47,6 +47,13 @@ export default class TorrentDownloader {
     }
     return index;
   }
+  #printProgress() {
+    process.stdout.write(
+      `Downloading ${Math.round(
+        (this.#totalDownloaded * 100) / this.#totalSize
+      )}% complete ....\r`
+    );
+  }
   #pieceHandler(payload, socket, pieces, queue, files) {
     pieces.addReceived(payload);
     const offset =
@@ -54,13 +61,8 @@ export default class TorrentDownloader {
     const fd = files[this.#getFileIndex(offset)];
     fs.write(fd, payload.block, 0, payload.block.length, offset, () => {
       this.#totalDownloaded += payload.block.length;
-      process.stdout.write(
-        `Downloading ${(this.#totalDownloaded / this.#totalSize).toFixed(
-          3
-        )}% complete... \r`
-      );
+      this.#printProgress();
     });
-
     if (pieces.isDone()) {
       console.log("DONE!");
       socket.end();
@@ -149,15 +151,14 @@ export default class TorrentDownloader {
   }
   #populateFiles(destPath) {
     if (this.torrent.info.files) {
-      this.torrent.info.files.forEach((file) =>
-        fs.ensureFileSync(
-          path.resolve(
-            destPath,
-            this.torrent.info.name.toString("utf8"),
-            file.path.map((p) => p.toString("utf8")).join(path.sep)
-          )
-        )
-      );
+      this.torrent.info.files.forEach((file) => {
+        const filePath = path.resolve(
+          destPath,
+          this.torrent.info.name.toString("utf8"),
+          file.path.map((p) => p.toString("utf8")).join(path.sep)
+        );
+        fs.ensureFileSync(filePath);
+      });
     } else {
       fs.ensureFileSync(
         path.resolve(destPath, this.torrent.info.name.toString("utf8"))
@@ -175,6 +176,7 @@ export default class TorrentDownloader {
     this.#populateFiles(path);
     const fds = this.#createFdList(path);
     tracker.getPeerList((peerlist) => {
+      console.log("Download will start soon");
       const pieces = new Pieces(this.torrent);
       peerlist.forEach((peer) => {
         this.#connectAndDownloadFromPeer(peer, pieces, fds);
