@@ -8,14 +8,21 @@ import onWholeMsg from "./onWholeMessage.js";
 import path from "node:path";
 import HTTPTracker from "../lib/HTTPTracker.js";
 import UDPTracker from "../lib/UDPTracker.js";
+import cliProgress from "cli-progress";
+import colors from "ansi-colors";
 
 export default class TorrentDownloader {
-  #totalDownloaded;
   #totalSize;
+  #progressBar;
   constructor(torrent) {
     this.torrent = torrent;
-    this.#totalDownloaded = 0;
     this.#totalSize = TorrentHelper.getSize(torrent);
+    this.#progressBar = new cliProgress.SingleBar({
+      format: colors.green("{bar}") + " {percentage}% complete",
+      barCompleteChar: "\u2588",
+      barIncompleteChar: "\u2591",
+      hideCursor: true,
+    });
   }
   #chokeHandler(socket) {
     socket.end();
@@ -47,24 +54,23 @@ export default class TorrentDownloader {
     }
     return index;
   }
-  #printProgress() {
-    process.stdout.write(
-      `Downloading ${Math.round(
-        (this.#totalDownloaded * 100) / this.#totalSize
-      )}% complete ....\r`
-    );
+  #printProgress(pieces) {
+    this.#progressBar.update(pieces.getDownloadedBlockCount());
   }
   #pieceHandler(payload, socket, pieces, queue, files) {
+    if (pieces.getDownloadedBlockCount() === 0) {
+      process.stdout.write(`Downloading...\n`);
+      this.#progressBar.start(pieces.getTotalBlockCount());
+    }
     pieces.addReceived(payload);
+    this.#printProgress(pieces);
     const offset =
       payload.index * this.torrent.info["piece length"] + payload.begin;
     const fd = files[this.#getFileIndex(offset)];
-    fs.write(fd, payload.block, 0, payload.block.length, offset, () => {
-      this.#totalDownloaded += payload.block.length;
-      this.#printProgress();
-    });
+    fs.write(fd, payload.block, 0, payload.block.length, offset);
     if (pieces.isDone()) {
       console.log("DONE!");
+      this.#progressBar.stop();
       socket.end();
       try {
         files.forEach((file) => file.close());
@@ -170,7 +176,7 @@ export default class TorrentDownloader {
     const fds = this.#createFdList(path);
     let peerlist = new Set();
     let cur = 0;
-    process.stdout.write("Peer discovery in progress\n");
+    process.stdout.write("Peer discovery in progress\n\n");
     let interval = setInterval(() => {
       let url = this.torrent["announce-list"][cur][0].toString("utf8");
       let tracker = null;
@@ -184,12 +190,10 @@ export default class TorrentDownloader {
         for (let peer of peers) {
           peerlist.add(peer);
         }
-        process.stdout.write(`Peer count ${peerlist.size}\r`);
-        if (peerlist.size >= 5) {
-          console.log("Download will start soon\n");
+        if (peerlist.size >= 8) {
           clearInterval(interval);
+          const pieces = new Pieces(this.torrent);
           peerlist.forEach((peer) => {
-            const pieces = new Pieces(this.torrent);
             this.#connectAndDownloadFromPeer(peer, pieces, fds);
           });
         }

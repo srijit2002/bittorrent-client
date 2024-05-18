@@ -12,6 +12,9 @@ export default class Pieces {
     }
     this._requested = buildPiecesArray();
     this._received = buildPiecesArray();
+    this._totalBlocks = this._received.reduce((totalBlocks, blocks) => {
+      return blocks.length + totalBlocks;
+    }, 0);
   }
 
   addRequested(pieceBlock) {
@@ -34,5 +37,14 @@ export default class Pieces {
 
   isDone() {
     return this._received.every((blocks) => blocks.every((i) => i));
+  }
+  getTotalBlockCount() {
+    return this._totalBlocks;
+  }
+  getDownloadedBlockCount() {
+    const downloaded = this._received.reduce((totalBlocks, blocks) => {
+      return blocks.filter((i) => i).length + totalBlocks;
+    }, 0);
+    return downloaded;
   }
 }
