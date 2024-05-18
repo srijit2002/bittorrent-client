@@ -24,13 +24,16 @@ export default class TorrentDownloader {
       hideCursor: true,
     });
   }
+
   #chokeHandler(socket) {
     socket.end();
   }
+
   #unchokeHandler(socket, pieces, state) {
-    state.chocked = false;
+    state.choked = false;
     this.#requestPiece(socket, pieces, state);
   }
+
   #bitfieldHandler(payload, socket, pieces, queue) {
     const isFirstPiece = queue.length() == 0;
     payload.forEach((byte, i) => {
@@ -41,6 +44,7 @@ export default class TorrentDownloader {
     });
     if (isFirstPiece) this.#requestPiece(socket, pieces, queue);
   }
+
   #getFileIndex(offset) {
     if (!this.torrent.info.files) return 0;
     let index = 0;
@@ -54,9 +58,11 @@ export default class TorrentDownloader {
     }
     return index;
   }
+
   #printProgress(pieces) {
     this.#progressBar.update(pieces.getDownloadedBlockCount());
   }
+
   #pieceHandler(payload, socket, pieces, queue, files) {
     if (pieces.getDownloadedBlockCount() === 0) {
       process.stdout.write(`Downloading...\n`);
@@ -64,8 +70,7 @@ export default class TorrentDownloader {
     }
     pieces.addReceived(payload);
     this.#printProgress(pieces);
-    const offset =
-      payload.index * this.torrent.info["piece length"] + payload.begin;
+    const offset = payload.index * this.torrent.info["piece length"] + payload.begin;
     const fd = files[this.#getFileIndex(offset)];
     fs.write(fd, payload.block, 0, payload.block.length, offset);
     if (pieces.isDone()) {
@@ -87,17 +92,28 @@ export default class TorrentDownloader {
       socket.write(TorrentMessageBuilder.buildInterested());
     } else {
       const m = TorrentHelper.parsePeerMsg(msg);
-      if (m.id === 0) this.#chokeHandler(socket);
-      if (m.id === 1) this.#unchokeHandler(socket, pieces, queue);
-      if (m.id === 4) this.#haveHandler(m.payload, socket, pieces, queue);
-      if (m.id === 5) this.#bitfieldHandler(m.payload, socket, pieces, queue);
-      if (m.id === 7) {
-        this.#pieceHandler(m.payload, socket, pieces, queue, files);
+      switch (m.id) {
+        case 0:
+          this.#chokeHandler(socket);
+          break;
+        case 1:
+          this.#unchokeHandler(socket, pieces, queue);
+          break;
+        case 4:
+          this.#haveHandler(m.payload, socket, pieces, queue);
+          break;
+        case 5:
+          this.#bitfieldHandler(m.payload, socket, pieces, queue);
+          break;
+        case 7:
+          this.#pieceHandler(m.payload, socket, pieces, queue, files);
+          break;
       }
     }
   }
+
   #requestPiece(socket, pieces, queue) {
-    if (queue.chocked) return null;
+    if (queue.choked) return null;
     while (queue.length()) {
       const pieceBlock = queue.deque();
       if (pieces.needed(pieceBlock)) {
@@ -107,6 +123,7 @@ export default class TorrentDownloader {
       }
     }
   }
+
   #haveHandler(payload, socket, pieces, queue) {
     const isFirstPiece = queue.length() == 0;
     const pieceIndex = payload.readUInt32BE(0);
@@ -115,94 +132,76 @@ export default class TorrentDownloader {
       this.#requestPiece(socket, pieces, queue);
     }
   }
+
   #isHandshake(msg) {
-    return (
-      msg.length === msg.readUInt8(0) + 49 &&
-      msg.toString("utf8", 1) === "BitTorrent protocol"
-    );
+    return msg.length === msg.readUInt8(0) + 49 && msg.toString("utf8", 1) === "BitTorrent protocol";
   }
+
   #connectAndDownloadFromPeer(peer, pieces, files) {
-    const socket = net.Socket();
+    const socket = new net.Socket();
     socket.on("error", (e) => {});
     socket.connect(peer.port, peer.ip, () => {
       socket.write(TorrentMessageBuilder.buildHandshake(this.torrent));
     });
     const queue = new Queue(this.torrent);
-    onWholeMsg(socket, (msg) =>
-      this.#msgHandler(msg, socket, pieces, queue, files)
-    );
+    onWholeMsg(socket, (msg) => this.#msgHandler(msg, socket, pieces, queue, files));
   }
+
   #createFdList(destPath) {
-    let fds = [];
     if (this.torrent.info.files) {
-      fds = this.torrent.info.files.map((file) =>
+      return this.torrent.info.files.map((file) =>
         fs.openSync(
-          path.resolve(
-            destPath,
-            this.torrent.info.name.toString("utf8"),
-            file.path.map((p) => p.toString("utf8")).join(path.sep)
-          ),
+          path.resolve(destPath, this.torrent.info.name.toString("utf8"), file.path.map((p) => p.toString("utf8")).join(path.sep)),
           "w"
         )
       );
     } else {
-      fds.push(
-        fs.openSync(
-          path.resolve(destPath, this.torrent.info.name.toString("utf8")),
-          "w"
-        )
-      );
+      return [
+        fs.openSync(path.resolve(destPath, this.torrent.info.name.toString("utf8")), "w")
+      ];
     }
-    return fds;
   }
+
   #populateFiles(destPath) {
     if (this.torrent.info.files) {
       this.torrent.info.files.forEach((file) => {
-        const filePath = path.resolve(
-          destPath,
-          this.torrent.info.name.toString("utf8"),
-          file.path.map((p) => p.toString("utf8")).join(path.sep)
-        );
+        const filePath = path.resolve(destPath, this.torrent.info.name.toString("utf8"), file.path.map((p) => p.toString("utf8")).join(path.sep));
         fs.ensureFileSync(filePath);
       });
     } else {
-      fs.ensureFileSync(
-        path.resolve(destPath, this.torrent.info.name.toString("utf8"))
-      );
+      fs.ensureFileSync(path.resolve(destPath, this.torrent.info.name.toString("utf8")));
     }
   }
-  download(path) {
-    this.#populateFiles(path);
-    const fds = this.#createFdList(path);
+
+  #fetchPeers(callback) {
     let peerlist = new Set();
     let cur = 0;
-    process.stdout.write("Peer discovery in progress\n\n");
-    let interval = setInterval(() => {
-      let url = this.torrent["announce-list"][cur][0].toString("utf8");
-      let tracker = null;
-      this.torrent.announce = this.torrent["announce-list"][cur][0];
-      if (new URL(url).protocol === "http:") {
-        tracker = new HTTPTracker(this.torrent);
-      } else {
-        tracker = new UDPTracker(this.torrent);
+    const trackerInterval = setInterval(() => {
+      if (cur >= this.torrent["announce-list"].length) {
+        clearInterval(trackerInterval);
+        console.log("Please try again after some time");
+        return;
       }
+      const url = this.torrent["announce-list"][cur][0].toString("utf8");
+      const tracker = new URL(url).protocol === "http:" ? new HTTPTracker(this.torrent) : new UDPTracker(this.torrent);
       tracker.getPeerList((peers) => {
-        for (let peer of peers) {
-          peerlist.add(peer);
-        }
+        peers.forEach((peer) => peerlist.add(peer));
         if (peerlist.size >= 8) {
-          clearInterval(interval);
-          const pieces = new Pieces(this.torrent);
-          peerlist.forEach((peer) => {
-            this.#connectAndDownloadFromPeer(peer, pieces, fds);
-          });
+          clearInterval(trackerInterval);
+          callback(Array.from(peerlist));
         }
       });
       cur++;
-      if (cur == this.torrent["announce-list"].length) {
-        clearInterval(interval);
-        console.log("Please try again after some times");
-      }
     }, 2500);
+  }
+
+  download(destPath) {
+    this.#populateFiles(destPath);
+    const fds = this.#createFdList(destPath);
+    process.stdout.write("Peer discovery in progress\n\n");
+    this.#fetchPeers((peerlist) => {
+      const pieces = new Pieces(this.torrent);
+      peerlist.forEach((peer) => this.#connectAndDownloadFromPeer(peer, pieces, fds));
+    });
   }
 }

@@ -98,6 +98,7 @@ export default class UDPTracker {
     this.#udpSend(socket, this.#buildConnReq(), this.#torrentUrl, (err) => {
       if (err) {
         socket.close();
+        callback([]);
         return;
       }
     });
@@ -112,6 +113,7 @@ export default class UDPTracker {
         callback(announceResp.peers);
       } else {
         console.log("Tracker Error: ", response.toString("utf8", 8));
+        callback([]);
       }
     });
   }
