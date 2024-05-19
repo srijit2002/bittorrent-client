@@ -163,7 +163,7 @@ export default class TorrentDownloader {
   }
 
   #fetchPeers(callback = () => {}) {
-    const PEER_COUNT = 30;
+    const PEER_COUNT = 20;
     let peerlist = new Set();
     let announceList = this.torrent["announce-list"];
     for (let announceUrl of announceList) {

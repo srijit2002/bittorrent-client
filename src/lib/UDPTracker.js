@@ -113,7 +113,6 @@ export default class UDPTracker {
         const announceResp = this.#parseAnnounceResp(response);
         callback(announceResp?.peers || []);
       } else {
-        console.log("Tracker Error: ", response.toString("utf8", 8));
         callback([]);
       }
     });
