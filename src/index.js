@@ -9,6 +9,6 @@ if (process.argv[2]) {
     torrent,
     path.resolve("downloads")
   );
-}else{
-    console.log("Usage: node src/index.js <filepath>");
+} else {
+  console.log("Usage: node src/index.js <filepath>");
 }

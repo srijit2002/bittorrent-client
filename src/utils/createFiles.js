@@ -1,7 +1,7 @@
 import fs from "fs-extra";
 
-export default function createFiles(filename, files = []) {
-  let outputFile = fs.openSync(filename, "r");
+export default function createFiles(tempfilepath, files = []) {
+  let outputFile = fs.openSync(tempfilepath, "r");
   let totalOffset = 0;
   for (let file of files) {
     let buf = Buffer.alloc(file.size);

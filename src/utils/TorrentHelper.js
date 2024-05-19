@@ -43,7 +43,7 @@ export default class TorrentHelper {
     const pieceLength = torrent.info["piece length"];
 
     const lastPieceLength =
-      totalLength % pieceLength == 0 ? pieceLength : totalLength % pieceLength;
+      totalLength % pieceLength === 0 ? pieceLength : totalLength % pieceLength;
     const nPieces = torrent.info.pieces.length / 20;
 
     return pieceIndex === nPieces - 1 ? lastPieceLength : pieceLength;

@@ -15,6 +15,7 @@ import createFiles from "./createFiles.js";
 export default class TorrentDownloader {
   #progressBar;
   #inProgreesFilePath;
+  #inProgreesFileMetadataPath;
   #destFolderPath;
   #systemDir;
   constructor(systemDir) {
@@ -71,25 +72,22 @@ export default class TorrentDownloader {
     return folderStruc;
   }
   #pieceHandler(payload, socket, pieces, queue, file) {
-    if (pieces.getDownloadedBlockCount() === 0) {
-      process.stdout.write(`Downloading...\n`);
-      this.#progressBar.start(pieces.getTotalBlockCount());
-    }
+    if (pieces.isDone()) return;
     pieces.addReceived(payload);
     this.#printProgress(pieces);
     const offset =
       payload.index * this.torrent.info["piece length"] + payload.begin;
     fs.writeSync(file, payload.block, 0, payload.block.length, offset);
+    pieces.serializeToFile();
     if (pieces.isDone()) {
       createFiles(this.#inProgreesFilePath, this.#getFolderStruc());
-      this.#progressBar.stop();
       try {
-        fs.unlinkSync(this.#inProgreesFilePath);
+        this.#progressBar.stop();
         socket.end();
         fs.closeSync(file);
       } catch (error) {
       } finally {
-        console.log("\nDONE!");
+        console.log("\nDownload Complete!");
         process.exit(0);
       }
     } else {
@@ -163,7 +161,6 @@ export default class TorrentDownloader {
   }
 
   #fetchPeers(callback = () => {}) {
-    const PEER_COUNT = 20;
     let peerlist = new Set();
     let announceList = this.torrent["announce-list"];
     for (let announceUrl of announceList) {
@@ -179,10 +176,14 @@ export default class TorrentDownloader {
       }
       if (tracker) {
         tracker.getPeerList((peers) => {
-          peers.forEach((peer) => peerlist.add(peer));
-          if (peerlist.size >= PEER_COUNT) {
-            callback(Array.from(peerlist));
-          }
+          let filteredPeers = [];
+          peers.forEach((peer) => {
+            if (!peerlist.has(JSON.stringify(peer))) {
+              peerlist.add(JSON.stringify(peer));
+              filteredPeers.push(peer);
+            }
+          });
+          callback(filteredPeers);
         });
       }
     }
@@ -195,11 +196,17 @@ export default class TorrentDownloader {
       this.#systemDir,
       this.torrent.info.name.toString("utf8")
     );
+    this.#inProgreesFileMetadataPath = path.resolve(
+      this.#systemDir,
+      "metadata-" + this.torrent.info.name.toString("utf8") + ".json"
+    );
     fs.ensureFileSync(this.#inProgreesFilePath);
-    const fd = fs.openSync(this.#inProgreesFilePath, "w");
-    process.stdout.write("Peer discovery in progress\n\n");
+    fs.ensureFileSync(this.#inProgreesFileMetadataPath);
+    const fd = fs.openSync(this.#inProgreesFilePath, "r+");
+    process.stdout.write(`\nDownloading...\n\n`);
+    const pieces = new Pieces(this.torrent, this.#inProgreesFileMetadataPath);
+    this.#progressBar.start(pieces.getTotalBlockCount());
     this.#fetchPeers((peerlist) => {
-      const pieces = new Pieces(this.torrent);
       peerlist.forEach((peer) =>
         this.#connectAndDownloadFromPeer(peer, pieces, fd)
       );
