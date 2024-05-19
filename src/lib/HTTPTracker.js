@@ -52,6 +52,6 @@ export default class HTTPTracker {
         responseType: "arraybuffer",
       })
       .then((data) => callback(this.#parseResponse(data.data).peers))
-      .catch((error) => console.log(error));
+      .catch((_) => {});
   }
 }

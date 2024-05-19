@@ -39,21 +39,25 @@ export default class TorrentHelper {
     return size;
   }
   static pieceLen(torrent, pieceIndex) {
-    const totalLength = torrent.info.length;
+    const totalLength = TorrentHelper.getSize(torrent);
     const pieceLength = torrent.info["piece length"];
 
-    const lastPieceLength = totalLength % pieceLength;
-    const lastPieceIndex = Math.floor(totalLength / pieceLength);
+    const lastPieceLength =
+      totalLength % pieceLength == 0 ? pieceLength : totalLength % pieceLength;
+    const nPieces = torrent.info.pieces.length / 20;
 
-    return lastPieceIndex === pieceIndex ? lastPieceLength : pieceLength;
+    return pieceIndex === nPieces - 1 ? lastPieceLength : pieceLength;
   }
   static getBlockLen(torrent, pieceIndex, blockIndex) {
     const pieceLength = this.pieceLen(torrent, pieceIndex);
 
-    const lastPieceLength = pieceLength % this.BLOCK_LEN;
-    const lastPieceIndex = Math.floor(pieceLength / this.BLOCK_LEN);
+    const lastBlockLength =
+      pieceLength % this.BLOCK_LEN === 0
+        ? this.BLOCK_LEN
+        : pieceLength % this.BLOCK_LEN;
+    const blockCount = Math.ceil(pieceLength / this.BLOCK_LEN);
 
-    return blockIndex === lastPieceIndex ? lastPieceLength : this.BLOCK_LEN;
+    return blockIndex === blockCount - 1 ? lastBlockLength : this.BLOCK_LEN;
   }
   static blocksPerPiece(torrent, pieceIndex) {
     const pieceLength = this.pieceLen(torrent, pieceIndex);

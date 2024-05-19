@@ -38,6 +38,7 @@ export default class UDPTracker {
     };
   }
   #parseAnnounceResp(resp) {
+    if (resp.length < 20) return null;
     function group(iterable, groupSize) {
       let groups = [];
       for (let i = 0; i < iterable.length; i += groupSize) {
@@ -110,7 +111,7 @@ export default class UDPTracker {
         this.#udpSend(socket, announceReq, this.#torrentUrl);
       } else if (this.#getRespType(response) === "announce") {
         const announceResp = this.#parseAnnounceResp(response);
-        callback(announceResp.peers);
+        callback(announceResp?.peers || []);
       } else {
         console.log("Tracker Error: ", response.toString("utf8", 8));
         callback([]);

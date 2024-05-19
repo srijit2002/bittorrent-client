@@ -10,19 +10,21 @@ import HTTPTracker from "../lib/HTTPTracker.js";
 import UDPTracker from "../lib/UDPTracker.js";
 import cliProgress from "cli-progress";
 import colors from "ansi-colors";
+import createFiles from "./createFiles.js";
 
 export default class TorrentDownloader {
-  #totalSize;
   #progressBar;
-  constructor(torrent) {
-    this.torrent = torrent;
-    this.#totalSize = TorrentHelper.getSize(torrent);
+  #inProgreesFilePath;
+  #destFolderPath;
+  #systemDir;
+  constructor(systemDir) {
     this.#progressBar = new cliProgress.SingleBar({
       format: colors.green("{bar}") + " {percentage}% complete",
       barCompleteChar: "\u2588",
       barIncompleteChar: "\u2591",
       hideCursor: true,
     });
+    this.#systemDir = systemDir;
   }
 
   #chokeHandler(socket) {
@@ -44,50 +46,58 @@ export default class TorrentDownloader {
     });
     if (isFirstPiece) this.#requestPiece(socket, pieces, queue);
   }
-
-  #getFileIndex(offset) {
-    if (!this.torrent.info.files) return 0;
-    let index = 0;
-    let curLength = 0;
-    for (let file of this.torrent.info.files) {
-      if (offset >= curLength && offset < curLength + file.length) {
-        break;
-      }
-      index++;
-      curLength += file.length;
-    }
-    return index;
-  }
-
   #printProgress(pieces) {
     this.#progressBar.update(pieces.getDownloadedBlockCount());
   }
-
-  #pieceHandler(payload, socket, pieces, queue, files) {
+  #getFolderStruc() {
+    if (!this.torrent.info.files) {
+      return [
+        {
+          path: path.resolve(
+            this.#destFolderPath,
+            this.info.name.toString("utf8")
+          ),
+          size: this.torrent.info.length,
+        },
+      ];
+    }
+    const folderStruc = this.torrent.info.files.map((file) => ({
+      path: path.resolve(
+        this.#destFolderPath,
+        file.path.map((p) => p.toString("utf8")).join(path.sep)
+      ),
+      size: file.length,
+    }));
+    return folderStruc;
+  }
+  #pieceHandler(payload, socket, pieces, queue, file) {
     if (pieces.getDownloadedBlockCount() === 0) {
       process.stdout.write(`Downloading...\n`);
       this.#progressBar.start(pieces.getTotalBlockCount());
     }
     pieces.addReceived(payload);
     this.#printProgress(pieces);
-    const offset = payload.index * this.torrent.info["piece length"] + payload.begin;
-    const fd = files[this.#getFileIndex(offset)];
-    fs.write(fd, payload.block, 0, payload.block.length, offset);
+    const offset =
+      payload.index * this.torrent.info["piece length"] + payload.begin;
+    fs.writeSync(file, payload.block, 0, payload.block.length, offset);
     if (pieces.isDone()) {
-      console.log("DONE!");
+      createFiles(this.#inProgreesFilePath, this.#getFolderStruc());
       this.#progressBar.stop();
-      socket.end();
       try {
-        files.forEach((file) => file.close());
-      } catch (e) {
-        console.log("Error in closing file");
+        fs.unlinkSync(this.#inProgreesFilePath);
+        socket.end();
+        fs.closeSync(file);
+      } catch (error) {
+      } finally {
+        console.log("\nDONE!");
+        process.exit(0);
       }
     } else {
       this.#requestPiece(socket, pieces, queue);
     }
   }
 
-  #msgHandler(msg, socket, pieces, queue, files) {
+  #msgHandler(msg, socket, pieces, queue, file) {
     if (this.#isHandshake(msg)) {
       socket.write(TorrentMessageBuilder.buildInterested());
     } else {
@@ -106,7 +116,7 @@ export default class TorrentDownloader {
           this.#bitfieldHandler(m.payload, socket, pieces, queue);
           break;
         case 7:
-          this.#pieceHandler(m.payload, socket, pieces, queue, files);
+          this.#pieceHandler(m.payload, socket, pieces, queue, file);
           break;
       }
     }
@@ -125,7 +135,7 @@ export default class TorrentDownloader {
   }
 
   #haveHandler(payload, socket, pieces, queue) {
-    const isFirstPiece = queue.length() == 0;
+    const isFirstPiece = queue.length() === 0;
     const pieceIndex = payload.readUInt32BE(0);
     queue.queue(pieceIndex);
     if (isFirstPiece) {
@@ -134,74 +144,65 @@ export default class TorrentDownloader {
   }
 
   #isHandshake(msg) {
-    return msg.length === msg.readUInt8(0) + 49 && msg.toString("utf8", 1) === "BitTorrent protocol";
+    return (
+      msg.length === msg.readUInt8(0) + 49 &&
+      msg.toString("utf8", 1) === "BitTorrent protocol"
+    );
   }
 
-  #connectAndDownloadFromPeer(peer, pieces, files) {
+  #connectAndDownloadFromPeer(peer, pieces, file) {
     const socket = new net.Socket();
     socket.on("error", (e) => {});
     socket.connect(peer.port, peer.ip, () => {
       socket.write(TorrentMessageBuilder.buildHandshake(this.torrent));
     });
     const queue = new Queue(this.torrent);
-    onWholeMsg(socket, (msg) => this.#msgHandler(msg, socket, pieces, queue, files));
+    onWholeMsg(socket, (msg) =>
+      this.#msgHandler(msg, socket, pieces, queue, file)
+    );
   }
 
-  #createFdList(destPath) {
-    if (this.torrent.info.files) {
-      return this.torrent.info.files.map((file) =>
-        fs.openSync(
-          path.resolve(destPath, this.torrent.info.name.toString("utf8"), file.path.map((p) => p.toString("utf8")).join(path.sep)),
-          "w"
-        )
-      );
-    } else {
-      return [
-        fs.openSync(path.resolve(destPath, this.torrent.info.name.toString("utf8")), "w")
-      ];
-    }
-  }
-
-  #populateFiles(destPath) {
-    if (this.torrent.info.files) {
-      this.torrent.info.files.forEach((file) => {
-        const filePath = path.resolve(destPath, this.torrent.info.name.toString("utf8"), file.path.map((p) => p.toString("utf8")).join(path.sep));
-        fs.ensureFileSync(filePath);
-      });
-    } else {
-      fs.ensureFileSync(path.resolve(destPath, this.torrent.info.name.toString("utf8")));
-    }
-  }
-
-  #fetchPeers(callback) {
+  #fetchPeers(callback = () => {}) {
+    const PEER_COUNT = 30;
     let peerlist = new Set();
-    let cur = 0;
-    const trackerInterval = setInterval(() => {
-      if (cur >= this.torrent["announce-list"].length) {
-        clearInterval(trackerInterval);
-        console.log("Please try again after some time");
-        return;
-      }
-      const url = this.torrent["announce-list"][cur][0].toString("utf8");
-      const tracker = new URL(url).protocol === "http:" ? new HTTPTracker(this.torrent) : new UDPTracker(this.torrent);
-      tracker.getPeerList((peers) => {
-        peers.forEach((peer) => peerlist.add(peer));
-        if (peerlist.size >= 8) {
-          clearInterval(trackerInterval);
-          callback(Array.from(peerlist));
+    let announceList = this.torrent["announce-list"];
+    for (let announceUrl of announceList) {
+      const url = announceUrl[0].toString("utf8");
+      this.torrent.announce = announceUrl[0];
+      let tracker = null;
+      if (new URL(url).protocol === "http:") {
+        tracker = new HTTPTracker(this.torrent);
+      } else {
+        if (new URL(url).port) {
+          tracker = new UDPTracker(this.torrent);
         }
-      });
-      cur++;
-    }, 2500);
+      }
+      if (tracker) {
+        tracker.getPeerList((peers) => {
+          peers.forEach((peer) => peerlist.add(peer));
+          if (peerlist.size >= PEER_COUNT) {
+            callback(Array.from(peerlist));
+          }
+        });
+      }
+    }
   }
 
-  download(destPath) {
-    this.#populateFiles(destPath);
-    const fds = this.#createFdList(destPath);
+  download(torrent, dpath) {
+    this.torrent = torrent;
+    this.#destFolderPath = dpath;
+    this.#inProgreesFilePath = path.resolve(
+      this.#systemDir,
+      this.torrent.info.name.toString("utf8")
+    );
+    fs.ensureFileSync(this.#inProgreesFilePath);
+    const fd = fs.openSync(this.#inProgreesFilePath, "w");
     process.stdout.write("Peer discovery in progress\n\n");
     this.#fetchPeers((peerlist) => {
       const pieces = new Pieces(this.torrent);
-      peerlist.forEach((peer) => this.#connectAndDownloadFromPeer(peer, pieces, fds));
+      peerlist.forEach((peer) =>
+        this.#connectAndDownloadFromPeer(peer, pieces, fd)
+      );
     });
   }
 }
