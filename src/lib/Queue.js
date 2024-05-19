@@ -2,33 +2,34 @@
 import TorrentHelper from "../utils/TorrentHelper.js";
 
 export default class Queue {
+  #queue;
   constructor(torrent) {
-    this._torrent = torrent;
-    this._queue = [];
+    this.torrent = torrent;
+    this.#queue = [];
     this.choked = true;
   }
 
   queue(pieceIndex) {
-    const nBlocks = TorrentHelper.blocksPerPiece(this._torrent, pieceIndex);
+    const nBlocks = TorrentHelper.blocksPerPiece(this.torrent, pieceIndex);
     for (let i = 0; i < nBlocks; i++) {
       const pieceBlock = {
         index: pieceIndex,
         begin: i * TorrentHelper.BLOCK_LEN,
-        length: TorrentHelper.getBlockLen(this._torrent, pieceIndex, i),
+        length: TorrentHelper.getBlockLen(this.torrent, pieceIndex, i),
       };
-      this._queue.push(pieceBlock);
+      this.#queue.push(pieceBlock);
     }
   }
 
   deque() {
-    return this._queue.shift();
+    return this.#queue.shift();
   }
 
   peek() {
-    return this._queue[0];
+    return this.#queue[0];
   }
 
   length() {
-    return this._queue.length;
+    return this.#queue.length;
   }
 }

@@ -1,14 +1,18 @@
 "use strict";
 import TorrentHelper from "../utils/TorrentHelper.js";
 import fs from "fs-extra";
-//6451 6456
+
 export default class Pieces {
-  updateState() {
+  #requested;
+  #received;
+  #metadataPath;
+  #totalBlocks;
+  #updateState() {
     try {
-      const jsonString = fs.readFileSync(this._metadataPath, "utf8");
+      const jsonString = fs.readFileSync(this.#metadataPath, "utf8");
       const oldState = JSON.parse(jsonString);
-      this._requested = oldState.requested;
-      this._received = oldState.received;
+      this.#requested = oldState.requested;
+      this.#received = oldState.received;
     } catch (error) {}
   }
   constructor(torrent, metadataPath) {
@@ -19,53 +23,53 @@ export default class Pieces {
         new Array(TorrentHelper.blocksPerPiece(torrent, i)).fill(false)
       );
     }
-    this._metadataPath = metadataPath;
-    this._requested = buildPiecesArray();
-    this._received = buildPiecesArray();
-    this._totalBlocks = this._received.reduce((totalBlocks, blocks) => {
+    this.#metadataPath = metadataPath;
+    this.#requested = buildPiecesArray();
+    this.#received = buildPiecesArray();
+    this.#totalBlocks = this.#received.reduce((totalBlocks, blocks) => {
       return blocks.length + totalBlocks;
     }, 0);
-    this.updateState();
+    this.#updateState();
   }
   serializeToFile() {
     const state = {
-      requested: this._requested,
-      received: this._received,
+      requested: this.#requested,
+      received: this.#received,
     };
     const jsonString = JSON.stringify(state, null, 2);
-    fs.writeFileSync(this._metadataPath, jsonString, "utf8");
+    fs.writeFileSync(this.#metadataPath, jsonString, "utf8");
   }
   addRequested(pieceBlock) {
     const blockIndex = pieceBlock.begin / TorrentHelper.BLOCK_LEN;
-    this._requested[pieceBlock.index][blockIndex] = true;
+    this.#requested[pieceBlock.index][blockIndex] = true;
   }
 
   addReceived(pieceBlock) {
     const blockIndex = pieceBlock.begin / TorrentHelper.BLOCK_LEN;
-    this._received[pieceBlock.index][blockIndex] = true;
+    this.#received[pieceBlock.index][blockIndex] = true;
   }
 
   needed(pieceBlock) {
-    if (this._requested.every((blocks) => blocks.every((i) => i))) {
-      this._requested = this._received.map((blocks) => blocks.slice());
+    if (this.#requested.every((blocks) => blocks.every((i) => i))) {
+      this.#requested = this.#received.map((blocks) => blocks.slice());
     }
     const blockIndex = pieceBlock.begin / TorrentHelper.BLOCK_LEN;
-    return !this._requested[pieceBlock.index][blockIndex];
+    return !this.#requested[pieceBlock.index][blockIndex];
   }
 
   isDone() {
-    return this._received.every((blocks) => blocks.every((i) => i));
+    return this.#received.every((blocks) => blocks.every((i) => i));
   }
   getTotalBlockCount() {
-    return this._totalBlocks;
+    return this.#totalBlocks;
   }
   getDownloadedBlockCount() {
-    const downloaded = this._received.reduce((totalBlocks, blocks) => {
+    const downloaded = this.#received.reduce((totalBlocks, blocks) => {
       return blocks.filter((i) => i).length + totalBlocks;
     }, 0);
     return downloaded;
   }
   free() {
-    fs.unlinkSync(this._metadataPath);
+    fs.unlinkSync(this.#metadataPath);
   }
 }
