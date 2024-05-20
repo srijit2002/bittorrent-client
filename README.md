@@ -5,7 +5,7 @@ A command line toy BitTorrent client written in Node.js.
 ## Features ✨
 
 - Supports downloading files (both single and multiple files) 📂
-- Can be resumed and paused ⏸️
+- It automatically resumes from the last downloaded percentage ⏸️
 - Shows download progress 📊
 
 ## Requirements
