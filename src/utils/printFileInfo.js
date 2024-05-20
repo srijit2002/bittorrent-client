@@ -3,7 +3,7 @@ import TorrentHelper from "./TorrentHelper.js";
 import { filesize } from "filesize";
 
 function getOrdinalSuffix(day) {
-  if (day > 3 && day < 21) return "th"; // for 4-20
+  if (day > 3 && day < 21) return "th";
   switch (day % 10) {
     case 1:
       return "st";
@@ -54,8 +54,12 @@ export default function printFileInfo(torrent) {
     "Size: ",
     filesize(TorrentHelper.getSize(torrent), { standard: "jedec" })
   );
-  printRow("Created At: ", formatDate(new Date(torrent["creation date"])));
-  printRow("Created By: ", torrent["created by"].toString("utf8"));
+  if (torrent["creation date"]) {
+    printRow("Created At: ", formatDate(new Date(torrent["creation date"])));
+  }
+  if (torrent["created by"]) {
+    printRow("Created By: ", torrent["created by"].toString("utf8"));
+  }
   printRow(
     "Pieces: ",
     `${torrent.info["pieces"].length / 20} X ${filesize(
