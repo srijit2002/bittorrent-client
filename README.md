@@ -1,6 +1,8 @@
 # BitTorrent Client
 
-A command line toy BitTorrent client written in Node.js.
+A command line toy BitTorrent client written in Node.js.  
+![Untitled video - Made with Clipchamp](https://github.com/srijit2002/bittorrent-client/assets/74085816/f20eb0d7-b868-43ef-801d-3616c11cfdd0)
+
 
 ## Features ✨
 
