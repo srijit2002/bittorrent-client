@@ -11,6 +11,7 @@ import UDPTracker from "../lib/UDPTracker.js";
 import cliProgress from "cli-progress";
 import colors from "ansi-colors";
 import createFiles from "./createFiles.js";
+import ansiColors from "ansi-colors";
 
 export default class TorrentDownloader {
   #progressBar;
@@ -71,6 +72,20 @@ export default class TorrentDownloader {
     }));
     return folderStruc;
   }
+  #createDir() {
+    createFiles(this.#inProgreesFilePath, this.#getFolderStruc());
+  }
+  #cleanUp(socket, file) {
+    try {
+      this.#progressBar.stop();
+      if (socket) socket.end();
+      if (file) fs.closeSync(file);
+    } catch (error) {
+    } finally {
+      console.log(ansiColors.green("\nDownload Completed!"));
+      process.exit(0);
+    }
+  }
   #pieceHandler(payload, socket, pieces, queue, file) {
     if (pieces.isDone()) return;
     pieces.addReceived(payload);
@@ -80,16 +95,8 @@ export default class TorrentDownloader {
     fs.writeSync(file, payload.block, 0, payload.block.length, offset);
     pieces.serializeToFile();
     if (pieces.isDone()) {
-      createFiles(this.#inProgreesFilePath, this.#getFolderStruc());
-      try {
-        this.#progressBar.stop();
-        socket.end();
-        fs.closeSync(file);
-      } catch (error) {
-      } finally {
-        console.log("\nDownload Complete!");
-        process.exit(0);
-      }
+      this.#createDir();
+      this.#cleanUp(socket, file);
     } else {
       this.#requestPiece(socket, pieces, queue);
     }
@@ -203,13 +210,18 @@ export default class TorrentDownloader {
     fs.ensureFileSync(this.#inProgreesFilePath);
     fs.ensureFileSync(this.#inProgreesFileMetadataPath);
     const fd = fs.openSync(this.#inProgreesFilePath, "r+");
-    process.stdout.write(`\nDownloading...\n\n`);
     const pieces = new Pieces(this.torrent, this.#inProgreesFileMetadataPath);
     this.#progressBar.start(pieces.getTotalBlockCount());
-    this.#fetchPeers((peerlist) => {
-      peerlist.forEach((peer) =>
-        this.#connectAndDownloadFromPeer(peer, pieces, fd)
-      );
-    });
+    this.#printProgress(pieces);
+    if (pieces.isDone()) {
+      this.#createDir();
+      this.#cleanUp(null, fd);
+    } else {
+      this.#fetchPeers((peerlist) => {
+        peerlist.forEach((peer) =>
+          this.#connectAndDownloadFromPeer(peer, pieces, fd)
+        );
+      });
+    }
   }
 }
