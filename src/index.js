@@ -7,10 +7,8 @@ import printFileInfo from "./utils/printFileInfo.js";
 if (process.argv[2]) {
   const torrent = TorrentHelper.parseTorrent(path.resolve(process.argv[2]));
   printFileInfo(torrent);
-  new TorrentDownloader(".bt-client").download(
-    torrent,
-    path.resolve("downloads")
-  );
+  let torrentDownloader = new TorrentDownloader(".bt-client");
+  torrentDownloader.download(torrent, path.resolve("downloads"));
 } else {
   console.log("Usage: node src/index.js <filepath>");
 }

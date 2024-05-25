@@ -12,6 +12,7 @@ import cliProgress from "cli-progress";
 import colors from "ansi-colors";
 import createFiles from "./createFiles.js";
 import ansiColors from "ansi-colors";
+import { hideSync, isHiddenSync } from "hidefile";
 
 export default class TorrentDownloader {
   #progressBar;
@@ -26,7 +27,11 @@ export default class TorrentDownloader {
       barIncompleteChar: "\u2591",
       hideCursor: true,
     });
-    this.#systemDir = systemDir;
+    this.#systemDir = path.resolve(systemDir);
+    fs.ensureDirSync(this.#systemDir);
+    if (!isHiddenSync(this.#systemDir)) {
+      hideSync(this.#systemDir);
+    }
   }
 
   #chokeHandler(socket) {
