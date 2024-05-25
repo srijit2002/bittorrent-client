@@ -28,7 +28,7 @@ export default class TorrentDownloader {
       barIncompleteChar: "\u2591",
       hideCursor: true,
     });
-    this.#systemDir = path.resolve(systemDir);
+    this.#systemDir = systemDir;
     fs.ensureDirSync(this.#systemDir);
     if (!isHiddenSync(this.#systemDir)) {
       hideSync(this.#systemDir);
