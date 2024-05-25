@@ -36,8 +36,8 @@ A command line toy BitTorrent client written in Node.js.
 5. Now type the follwing commmand and it will open a dialog box. Select the `.torrent` file and click ok.
 
     ```sh
-      download-torrent
-      ```
+    download-torrent
+     ```
 **Note:** Currently, only UDP trackers are supported.
 
 ## Resources Used 📚
