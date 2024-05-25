@@ -29,11 +29,15 @@ A command line toy BitTorrent client written in Node.js.
    ```sh
    npm install
    ```
-4. Run the client:
+4. Link the client:
    ```sh
-   node src/index.js <torrent file path>
+   npm link
    ```
+5. Now type the follwing commmand and it will open a dialog box. Select the `.torrent` file and click ok.
 
+    ```sh
+      download-torrent
+      ```
 **Note:** Currently, only UDP trackers are supported.
 
 ## Resources Used 📚
