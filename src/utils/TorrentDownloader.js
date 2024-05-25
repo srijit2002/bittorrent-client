@@ -13,6 +13,7 @@ import colors from "ansi-colors";
 import createFiles from "./createFiles.js";
 import ansiColors from "ansi-colors";
 import { hideSync, isHiddenSync } from "hidefile";
+import openDirDialog from "./openDirDialog.js";
 
 export default class TorrentDownloader {
   #progressBar;
@@ -85,6 +86,7 @@ export default class TorrentDownloader {
       this.#progressBar.stop();
       if (socket) socket.end();
       if (file) fs.closeSync(file);
+      openDirDialog(this.#destFolderPath);
     } catch (error) {
     } finally {
       console.log(ansiColors.green("\nDownload Completed!"));
