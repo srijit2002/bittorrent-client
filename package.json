@@ -9,6 +9,9 @@
   },
   "keywords": [],
   "author": "",
+  "bin": {
+    "download-torrent": "index.js"
+  },
   "license": "ISC",
   "dependencies": {
     "ansi-colors": "^4.1.3",
